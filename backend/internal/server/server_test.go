@@ -90,6 +90,55 @@ func TestSignup_DuplicateEmail(t *testing.T) {
 	}
 }
 
+// 仕様書の minLength / maxLength と bcrypt の上限（72 バイト）について、境界の両側を確認する。
+func TestSignup_Boundaries(t *testing.T) {
+	t.Parallel()
+
+	const domain = "@example.com"
+	emailOfLen := func(n int) string { return strings.Repeat("a", n-len(domain)) + domain }
+	body := func(name, email, password string) string {
+		return `{"name":"` + name + `","email":"` + email + `","password":"` + password + `"}`
+	}
+	const (
+		name     = "taro"
+		email    = "taro@example.com"
+		password = "password123"
+	)
+
+	tests := []struct {
+		name string
+		body string
+		want int
+	}{
+		// name: 1〜50 文字
+		{"name 0 chars", body("", email, password), http.StatusBadRequest},
+		{"name 1 char", body("a", email, password), http.StatusCreated},
+		{"name 50 chars", body(strings.Repeat("a", 50), email, password), http.StatusCreated},
+		{"name 51 chars", body(strings.Repeat("a", 51), email, password), http.StatusBadRequest},
+		// email: 254 文字まで
+		{"email 254 chars", body(name, emailOfLen(254), password), http.StatusCreated},
+		{"email 255 chars", body(name, emailOfLen(255), password), http.StatusBadRequest},
+		// password: 8〜72 文字、かつ 72 バイトまで
+		{"password 7 chars", body(name, email, strings.Repeat("a", 7)), http.StatusBadRequest},
+		{"password 8 chars", body(name, email, strings.Repeat("a", 8)), http.StatusCreated},
+		{"password 72 chars", body(name, email, strings.Repeat("a", 72)), http.StatusCreated},
+		{"password 73 chars", body(name, email, strings.Repeat("a", 73)), http.StatusBadRequest},
+		{"password 72 bytes multibyte", body(name, email, strings.Repeat("あ", 24)), http.StatusCreated},
+		{"password 73 bytes multibyte", body(name, email, strings.Repeat("あ", 24)+"a"), http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			srv := newTestServer(t)
+
+			code, res := doJSON(t, srv, http.MethodPost, "/v1/signup", tt.body)
+			if code != tt.want {
+				t.Fatalf("status = %d, want %d, body = %v", code, tt.want, res)
+			}
+		})
+	}
+}
+
 func TestSignup_BadRequest(t *testing.T) {
 	t.Parallel()
 

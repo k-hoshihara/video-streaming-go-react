@@ -71,6 +71,9 @@ func TestUserUsecase_Signup_PasswordLength(t *testing.T) {
 	}{
 		{"72 bytes is allowed", strings.Repeat("a", 72), nil},
 		{"73 bytes is rejected", strings.Repeat("a", 73), domain.ErrPasswordTooLong},
+		// 24 文字 × 3 バイト = 72 バイト
+		{"multibyte 72 bytes is allowed", strings.Repeat("あ", 24), nil},
+		{"multibyte 73 bytes is rejected", strings.Repeat("あ", 24) + "a", domain.ErrPasswordTooLong},
 		// 30 文字だが 90 バイトなので拒否する
 		{"multibyte over 72 bytes is rejected", strings.Repeat("あ", 30), domain.ErrPasswordTooLong},
 	}
