@@ -8,6 +8,7 @@
   "timezone": "Asia/Tokyo",
   "schedule": ["before 9am"],
   "prConcurrentLimit": 5,
+  "minimumReleaseAge": "3 days",
   "labels": ["dependencies"],
   "packageRules": [
     {
