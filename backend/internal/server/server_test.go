@@ -50,7 +50,7 @@ func TestSignup_Created(t *testing.T) {
 	t.Parallel()
 	srv := newTestServer(t)
 
-	code, body := doJSON(t, srv, http.MethodPost, "/signup",
+	code, body := doJSON(t, srv, http.MethodPost, "/v1/signup",
 		`{"name":"taro","email":"Taro@Example.com","password":"password123"}`)
 
 	if code != http.StatusCreated {
@@ -71,13 +71,13 @@ func TestSignup_DuplicateEmail(t *testing.T) {
 	t.Parallel()
 	srv := newTestServer(t)
 
-	if code, body := doJSON(t, srv, http.MethodPost, "/signup",
+	if code, body := doJSON(t, srv, http.MethodPost, "/v1/signup",
 		`{"name":"taro","email":"taro@example.com","password":"password123"}`); code != http.StatusCreated {
 		t.Fatalf("first signup status = %d, body = %v", code, body)
 	}
 
 	// 大文字小文字だけが異なるメールアドレスも重複として扱う。
-	code, body := doJSON(t, srv, http.MethodPost, "/signup",
+	code, body := doJSON(t, srv, http.MethodPost, "/v1/signup",
 		`{"name":"jiro","email":"TARO@example.com","password":"password456"}`)
 	if code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d, body = %v", code, http.StatusConflict, body)
@@ -106,7 +106,7 @@ func TestSignup_BadRequest(t *testing.T) {
 			t.Parallel()
 			srv := newTestServer(t)
 
-			code, body := doJSON(t, srv, http.MethodPost, "/signup", tt.body)
+			code, body := doJSON(t, srv, http.MethodPost, "/v1/signup", tt.body)
 			if code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d, body = %v", code, http.StatusBadRequest, body)
 			}

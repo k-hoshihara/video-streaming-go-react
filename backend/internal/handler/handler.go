@@ -31,7 +31,7 @@ func New(user UserUsecase) *Handler {
 	return &Handler{user: user}
 }
 
-// Signup は POST /signup のハンドラー。
+// Signup は POST /v1/signup のハンドラー。
 func (h *Handler) Signup(ctx context.Context, req oapi.SignupRequestObject) (oapi.SignupResponseObject, error) {
 	user, err := h.user.Signup(ctx, usecase.SignupInput{
 		Name:     req.Body.Name,

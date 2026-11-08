@@ -53,7 +53,7 @@ type SignupJSONRequestBody = SignupRequest
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Signup ユーザー登録
-	// (POST /signup)
+	// (POST /v1/signup)
 	Signup(ctx echo.Context) error
 }
 
@@ -118,7 +118,7 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 		Handler: si,
 	}
 
-	router.POST(options.BaseURL+"/signup", wrapper.Signup, options.OperationMiddlewares["signup"]...)
+	router.POST(options.BaseURL+"/v1/signup", wrapper.Signup, options.OperationMiddlewares["signup"]...)
 
 }
 
@@ -189,7 +189,7 @@ func (response Signup500JSONResponse) VisitSignupResponse(w http.ResponseWriter)
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Signup ユーザー登録
-	// (POST /signup)
+	// (POST /v1/signup)
 	Signup(ctx context.Context, request SignupRequestObject) (SignupResponseObject, error)
 }
 
@@ -256,16 +256,16 @@ func (sh *strictHandler) Signup(ctx echo.Context) error {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"vJRNaxRNEMe/SqjnOba7s5sEdU4qeAh4EINeJEg7U5ntkH5Jd48mhDnMDEqECN7Ek6gg8R0EJWLAD9Ma",
-	"ybeQ7kl2ncwSLyG3mt6qf/3r1127CYnkSgoU1kC8CSYZIachvKq11D5QWirUlmE45mgMzdCHdkMhxGCs",
-	"ZiKDoiCgcS1nGlOIb48Tl8hRory7gomFgsAiy0SubuBajsZ2eyCnbDUE65SrVV9rqZaXDj97ieRAYFlq",
-	"Ti3Eh+kEOF2/hiKzI4iH83PkuD8CgnLsyrYr5yMCnImjz8EUGUWNuS912pY6Oh0MZ9uK54ctxQvkH+CC",
-	"SzKeatxtGsibBqfcUaKRWkzv0MB2zCmlFs9ZFtQ7Q42Zd7B2UlnaystzlsIJtE+eNtQeG/kv/92hvQAT",
-	"yzJIMxvY32IpyplFq5FyJrKZy9cXgMA91IZJATEMelEv8p6kQkEVgxhme1FvNuC1owCtb8Kj9KGSzav0",
-	"TKllUiykEB8+Wmjso7FXZLoRaEthUYQCqtQqS0JJf8VIMVkpH/2vcRli+K8/2bl+86vptzeiaFOyOsdw",
-	"YJQUprnjYTQ4tebhFYWeKZpEM2UbbL+ffT/Y/uzKp6587urXrt5z1VdX73mSc1F0av2bv5opBlz91lWf",
-	"XLXjqm+u3nLl9s/dx/sfXjUGLp6FgRd+6vqdq166+pGr33sn5XZDZn93y5U/vJn5M6FRfQlmnrh679fD",
-	"Bwf1jis/ejj1m3ApBQGTc071RnA+ua/GLRCwNDN+6WhuR7BUFEXxZwA=",
+	"vJTNatVAFMdfpRxdjvfm3raoWangouBCLLqRImNymjul89GZSW0pWSRBqVDBnbgSFaR+g6BULPgwo5W+",
+	"hcykvTXNpW5Kd2cm5/zP//xmJhuQSK6kQGENxBtgkhFyGsLrWkvtA6WlQm0Zhm2OxtAMfWjXFUIMxmom",
+	"MigKAhpXcqYxhfjuOHGBHCbK+0uYWCgIzLNM5OoWruRobLcHcsqWQ7BGuVr2tZZqeeVg2UskBwKLUnNq",
+	"IT5IJ8Dp2g0UmR1BPJydIcf9ERCUY1e2XTkbEeBMHC4HE2QUNeaB1Glb6nB3MJxuK14cthQvkf+ACy7J",
+	"eKpxt0kgbxuccEaJRmoxvUcD2zGnlFq8YFlQ7ww1Zt7B2kllaSsvz1kKJ9A+edpQe2zkf/x3h/YCTCzK",
+	"IM1sYH+HpSin5q1GypnIpq7enAMCq6gNkwJiGPSiXuQ9SYWCKgYxTPei3nTAa0cBWn910DfhXvqVks3F",
+	"9FipZVLMpRAf3FtoJkBjr8l0PQCXwqIIBVSpZZaEkv6SkeLoVfnovMZFiOFc/+jZ9Zuvpt9+FEUblNU5",
+	"hg2jpDDNMQ+jwak1Dxcp9EzRJJop25D78/zH/tYXVz5z5QtXv3H1rqu+uXrXw5yJolPr3/xtJhhw9TtX",
+	"fXbVtqu+u3rTlVu/dp7sfXzdGLh8FgZe+qnr96565erHrv7gnZRbDZm9nU1X/vRmZs+ERvU1mHnq6t3f",
+	"jx7u19uu/OTh1G/DoRQETM451evB+dF5NW6BgKWZ8e+O5nYEC0VRFH8HAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

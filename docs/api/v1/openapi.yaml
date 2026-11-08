@@ -3,7 +3,7 @@ info:
   title: Video Streaming API
   version: 1.0.0
 paths:
-  /signup:
+  /v1/signup:
     post:
       operationId: signup
       summary: ユーザー登録
