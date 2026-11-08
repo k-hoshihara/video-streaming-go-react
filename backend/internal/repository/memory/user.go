@@ -6,21 +6,23 @@ import (
 	"context"
 	"sync"
 
+	"github.com/google/uuid"
+
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/domain"
 )
 
 // UserRepository はユーザーをメモリ上に保持する。並行に呼び出しても安全。
 type UserRepository struct {
 	mu      sync.RWMutex
-	byID    map[string]domain.User
-	byEmail map[string]string // email -> id
+	byID    map[uuid.UUID]domain.User
+	byEmail map[string]uuid.UUID // email -> id
 }
 
 // NewUserRepository は UserRepository を生成する。
 func NewUserRepository() *UserRepository {
 	return &UserRepository{
-		byID:    make(map[string]domain.User),
-		byEmail: make(map[string]string),
+		byID:    make(map[uuid.UUID]domain.User),
+		byEmail: make(map[string]uuid.UUID),
 	}
 }
 

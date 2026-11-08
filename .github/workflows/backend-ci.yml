@@ -27,7 +27,13 @@ defaults:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write # octocov が PR にカバレッジをコメントする
+      actions: read # octocov が main のレポート（Artifacts）を読んで差分を出す
+    env:
+      TEST_DATABASE_URL: postgres://app:app@localhost:5432/app?sslmode=disable
     services:
       postgres:
         image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
@@ -56,10 +62,24 @@ jobs:
           go generate ./...
           git diff --exit-code
 
+      # 命令網羅（C0）。自動生成コード（internal/oapi）は計測対象から外す
       - name: Test
+        run: |
+          pkgs=$(go list ./internal/... | grep -v '/internal/oapi$' | paste -sd, -)
+          go test -race -coverpkg="$pkgs" -coverprofile=coverage.out ./...
+
+      # 分岐網羅（C1）
+      - name: Branch coverage
+        run: scripts/branch-coverage.sh branch-coverage.json
+
+      - name: Report coverage
+        # フォークからの PR はトークンに書き込み権限がなく、コメントできないため除外する
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: k1LoW/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278 # v1.5.2
+        with:
+          version: v0.83.5
         env:
-          TEST_DATABASE_URL: postgres://app:app@localhost:5432/app?sslmode=disable
-        run: go test -race -coverpkg=./internal/... -coverprofile=coverage.out ./...
+          OCTOCOV_CUSTOM_METRICS_BRANCH: backend/branch-coverage.json
 
   lint:
     runs-on: ubuntu-latest

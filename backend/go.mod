@@ -2,7 +2,10 @@ module github.com/k-hoshihara/video-streaming-go-react/backend
 
 go 1.27.3
 
-tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
+tool (
+	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
+	github.com/rillig/gobco
+)
 
 require (
 	github.com/getkin/kin-openapi v0.153.0
@@ -26,6 +29,7 @@ require (
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.23 // indirect
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.2 // indirect
+	github.com/rillig/gobco v1.3.4 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
 	github.com/speakeasy-api/openapi v1.24.0 // indirect

@@ -1,7 +1,9 @@
 package server_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/handler"
+	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/oapi"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/repository/memory"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/server"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/usecase"
@@ -97,6 +100,8 @@ func TestSignup_BadRequest(t *testing.T) {
 		{"invalid email", `{"name":"taro","email":"not-an-email","password":"password123"}`},
 		{"password too short", `{"name":"taro","email":"taro@example.com","password":"short"}`},
 		{"password too long", `{"name":"taro","email":"taro@example.com","password":"` + strings.Repeat("a", 73) + `"}`},
+		// 30 文字で仕様書の maxLength は満たすが、90 バイトで bcrypt の上限を超える
+		{"multibyte password too long", `{"name":"taro","email":"taro@example.com","password":"` + strings.Repeat("あ", 30) + `"}`},
 		{"empty name", `{"name":"","email":"taro@example.com","password":"password123"}`},
 		{"missing name", `{"email":"taro@example.com","password":"password123"}`},
 		{"malformed json", `{"name":`},
@@ -114,5 +119,31 @@ func TestSignup_BadRequest(t *testing.T) {
 				t.Errorf("body = %v, want message", body)
 			}
 		})
+	}
+}
+
+// failingHandler は常に想定外のエラーを返すハンドラー。
+type failingHandler struct{}
+
+func (failingHandler) Signup(context.Context, oapi.SignupRequestObject) (oapi.SignupResponseObject, error) {
+	return nil, errors.New("database is down")
+}
+
+// 想定外のエラーは 500 にし、エラーの詳細をクライアントに返さない。
+func TestSignup_InternalServerError(t *testing.T) {
+	t.Parallel()
+
+	e, err := server.New(failingHandler{}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatalf("server.New() error = %v", err)
+	}
+
+	code, body := doJSON(t, e, http.MethodPost, "/v1/signup",
+		`{"name":"taro","email":"taro@example.com","password":"password123"}`)
+	if code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d, body = %v", code, http.StatusInternalServerError, body)
+	}
+	if body["message"] != "Internal Server Error" {
+		t.Errorf("message = %v, want %q", body["message"], "Internal Server Error")
 	}
 }

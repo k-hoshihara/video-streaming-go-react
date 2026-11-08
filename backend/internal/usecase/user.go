@@ -22,12 +22,23 @@ type UserRepository interface {
 // UserUsecase はユーザーに関する操作を提供する。
 type UserUsecase struct {
 	repo UserRepository
-	now  func() time.Time
+
+	// テストで差し替えられるように関数として持つ
+	now          func() time.Time
+	newID        func() (uuid.UUID, error)
+	hashPassword func(password []byte) ([]byte, error)
 }
 
 // NewUserUsecase は UserUsecase を生成する。
 func NewUserUsecase(repo UserRepository) *UserUsecase {
-	return &UserUsecase{repo: repo, now: time.Now}
+	return &UserUsecase{
+		repo:  repo,
+		now:   time.Now,
+		newID: uuid.NewV7,
+		hashPassword: func(password []byte) ([]byte, error) {
+			return bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
+		},
+	}
 }
 
 // SignupInput はユーザー登録の入力。
@@ -40,18 +51,23 @@ type SignupInput struct {
 // Signup はユーザーを登録する。
 // メールアドレスは大文字小文字を区別せずに一意とするため、小文字に揃えて保存する。
 func (u *UserUsecase) Signup(ctx context.Context, in SignupInput) (*domain.User, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	// 仕様書の maxLength は文字数なので、マルチバイト文字だと bcrypt の上限（バイト数）を超えうる
+	if len(in.Password) > domain.MaxPasswordBytes {
+		return nil, domain.ErrPasswordTooLong
+	}
+
+	hash, err := u.hashPassword([]byte(in.Password))
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	id, err := uuid.NewV7()
+	id, err := u.newID()
 	if err != nil {
 		return nil, fmt.Errorf("generate user id: %w", err)
 	}
 
 	user := &domain.User{
-		ID:           id.String(),
+		ID:           id,
 		Name:         in.Name,
 		Email:        strings.ToLower(in.Email),
 		PasswordHash: hash,

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/domain"
@@ -38,19 +37,17 @@ func (h *Handler) Signup(ctx context.Context, req oapi.SignupRequestObject) (oap
 		Email:    string(req.Body.Email),
 		Password: req.Body.Password,
 	})
-	if errors.Is(err, domain.ErrEmailAlreadyExists) {
+	switch {
+	case errors.Is(err, domain.ErrPasswordTooLong):
+		return oapi.Signup400JSONResponse{Message: "password is too long"}, nil
+	case errors.Is(err, domain.ErrEmailAlreadyExists):
 		return oapi.Signup409JSONResponse{Message: "email already exists"}, nil
-	}
-	if err != nil {
+	case err != nil:
 		return nil, err
 	}
 
-	id, err := uuid.Parse(user.ID)
-	if err != nil {
-		return nil, err
-	}
 	return oapi.Signup201JSONResponse{
-		Id:        id,
+		Id:        user.ID,
 		Name:      user.Name,
 		Email:     openapi_types.Email(user.Email),
 		CreatedAt: user.CreatedAt,

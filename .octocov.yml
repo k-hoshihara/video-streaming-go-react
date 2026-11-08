@@ -1,0 +1,31 @@
+# octocov の設定。Backend CI で計測したカバレッジを PR にコメントする。
+# 分岐網羅（C1）は backend/scripts/branch-coverage.sh の結果をカスタムメトリクスとして渡す。
+coverage:
+  # 命令網羅（C0）。go test -coverprofile の出力
+  paths:
+    - backend/coverage.out
+  exclude:
+    - "backend/internal/oapi/**" # 自動生成コード
+codeToTestRatio:
+  code:
+    - "backend/**/*.go"
+    - "!backend/**/*_test.go"
+    - "!backend/internal/oapi/**"
+  test:
+    - "backend/**/*_test.go"
+testExecutionTime:
+  if: true
+comment:
+  if: is_pull_request
+  # コメントを増やさず、1 件を更新し続ける
+  updatePrevious: true
+summary:
+  if: true
+# PR のベースブランチとの差分を表示するため、main のレポートを Artifacts に保存する
+diff:
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}
+report:
+  if: is_default_branch
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/domain"
@@ -71,7 +72,7 @@ func newTestPool(t *testing.T) *pgxpool.Pool {
 
 func newUser(email string) *domain.User {
 	return &domain.User{
-		ID:           uuid.NewString(),
+		ID:           uuid.New(),
 		Name:         "taro",
 		Email:        email,
 		PasswordHash: []byte("$2a$10$hash"),
@@ -100,6 +101,38 @@ func TestUserRepository_Create(t *testing.T) {
 	if got.ID != want.ID || got.Name != want.Name || got.Email != want.Email ||
 		hash != string(want.PasswordHash) || !got.CreatedAt.Equal(want.CreatedAt) {
 		t.Errorf("stored = %+v (hash %q), want %+v", got, hash, want)
+	}
+}
+
+// 一意制約違反以外の DB エラーは ErrEmailAlreadyExists にせず、そのまま返す。
+func TestUserRepository_Create_DBError(t *testing.T) {
+	t.Parallel()
+	pool := newTestPool(t)
+	r := NewUserRepository(pool)
+	pool.Close()
+
+	err := r.Create(t.Context(), newUser("taro@example.com"))
+	if err == nil || errors.Is(err, domain.ErrEmailAlreadyExists) {
+		t.Fatalf("Create() error = %v, want a non-duplicate error", err)
+	}
+}
+
+// PostgreSQL が一意制約違反以外のエラー（ここではテーブルが存在しない）を返した場合も、
+// ErrEmailAlreadyExists にせずそのまま返す。
+func TestUserRepository_Create_OtherPgError(t *testing.T) {
+	t.Parallel()
+	pool := newTestPool(t)
+	r := NewUserRepository(pool)
+	if _, err := pool.Exec(t.Context(), "DROP TABLE users"); err != nil {
+		t.Fatalf("drop table: %v", err)
+	}
+
+	err := r.Create(t.Context(), newUser("taro@example.com"))
+	if _, ok := errors.AsType[*pgconn.PgError](err); !ok {
+		t.Fatalf("Create() error = %v, want a PostgreSQL error", err)
+	}
+	if errors.Is(err, domain.ErrEmailAlreadyExists) {
+		t.Fatalf("Create() error = %v, must not be %v", err, domain.ErrEmailAlreadyExists)
 	}
 }
 
