@@ -13,16 +13,19 @@ import (
 
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/handler"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/oapi"
-	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/repository/memory"
+	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/repository/postgres"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/server"
+	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/testdb"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/usecase"
 )
 
-// newTestServer は本番と同じ構成（仕様書による検証を含む）で組み立てたサーバーを返す。
+// newTestServer は本番と同じ構成（仕様書による検証、本物の PostgreSQL）で組み立てたサーバーを返す。
+// DB はテストごとに専用のスキーマを使うため、並列に実行しても互いに影響しない。
 func newTestServer(t *testing.T) http.Handler {
 	t.Helper()
 
-	h := handler.New(usecase.NewUserUsecase(memory.NewUserRepository()))
+	repo := postgres.NewUserRepository(testdb.New(t))
+	h := handler.New(usecase.NewUserUsecase(repo))
 	e, err := server.New(h, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("server.New() error = %v", err)

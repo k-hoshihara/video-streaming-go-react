@@ -12,8 +12,8 @@ covered=0
 total=0
 uncovered=""
 
-# 自動生成コード（internal/oapi）は対象外
-for pkg in $(go list ./internal/... | grep -v '/internal/oapi$'); do
+# 自動生成コード（internal/oapi）とテスト用のヘルパー（internal/testdb）は対象外
+for pkg in $(go list ./internal/... | grep -v -E '/internal/(oapi|testdb)$'); do
   dir=${pkg#"$module"/}
   if ! result=$(cd "$dir" && go tool gobco -branch . 2>&1); then
     echo "$result"

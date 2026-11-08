@@ -18,7 +18,8 @@ backend/
     ├── handler/           手書き    HTTP と usecase の間の変換
     ├── usecase/           手書き    業務ロジック
     ├── domain/            手書き    エンティティとエラー
-    └── repository/        手書き    データの保存（postgres / memory）
+    ├── repository/        手書き    データの保存（PostgreSQL）
+    └── testdb/            手書き    テストで本物の DB を使うためのヘルパー
 ```
 
 手書きのコードと自動生成のコードは、次のようにつながっています。

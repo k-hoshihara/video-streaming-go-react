@@ -4,8 +4,8 @@
 generate:
 	go generate ./...
 
-# 自動生成コード（internal/oapi）はカバレッジの計測対象から外す
-COVER_PKGS := $(shell go list ./internal/... | grep -v '/internal/oapi$$' | paste -sd, -)
+# 自動生成コード（internal/oapi）とテスト用のヘルパー（internal/testdb）はカバレッジの計測対象から外す
+COVER_PKGS := $(shell go list ./internal/... | grep -v -E '/internal/(oapi|testdb)$$' | paste -sd, -)
 
 test:
 	go test -race -coverpkg=$(COVER_PKGS) -coverprofile=coverage.out ./...
@@ -19,8 +19,11 @@ coverage: test
 lint:
 	golangci-lint run ./...
 
+# ローカルの DB（db/compose.yml）に接続して起動する
+DATABASE_URL ?= postgres://app:app@localhost:5432/app?sslmode=disable
+
 run:
-	go run ./cmd/server
+	DATABASE_URL='$(DATABASE_URL)' go run ./cmd/server
 
 docker-build:
 	docker build -t video-streaming-backend .

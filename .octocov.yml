@@ -6,11 +6,13 @@ coverage:
     - backend/coverage.out
   exclude:
     - "backend/internal/oapi/**" # 自動生成コード
+    - "backend/internal/testdb/**" # テスト用のヘルパー
 codeToTestRatio:
   code:
     - "backend/**/*.go"
     - "!backend/**/*_test.go"
     - "!backend/internal/oapi/**"
+    - "!backend/internal/testdb/**"
   test:
     - "backend/**/*_test.go"
 testExecutionTime:

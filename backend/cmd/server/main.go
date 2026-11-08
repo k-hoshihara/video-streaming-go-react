@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/handler"
-	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/repository/memory"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/repository/postgres"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/server"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/usecase"
@@ -33,12 +32,12 @@ func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	userRepo, closeRepo, err := newUserRepository(ctx, logger)
+	pool, err := newDBPool(ctx)
 	if err != nil {
 		return err
 	}
-	defer closeRepo()
-	userUsecase := usecase.NewUserUsecase(userRepo)
+	defer pool.Close()
+	userUsecase := usecase.NewUserUsecase(postgres.NewUserRepository(pool))
 	h := handler.New(userUsecase)
 
 	e, err := server.New(h, logger)
@@ -74,25 +73,24 @@ func run(logger *slog.Logger) error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-// newUserRepository は DATABASE_URL が設定されていれば PostgreSQL、なければメモリ上の repository を返す。
-func newUserRepository(ctx context.Context, logger *slog.Logger) (usecase.UserRepository, func(), error) {
+// newDBPool は DATABASE_URL の PostgreSQL に接続する。
+func newDBPool(ctx context.Context) (*pgxpool.Pool, error) {
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
-		logger.Warn("DATABASE_URL is not set; using in-memory repository (data is lost on restart)")
-		return memory.NewUserRepository(), func() {}, nil
+		return nil, errors.New("DATABASE_URL is not set")
 	}
 
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
-		return nil, nil, fmt.Errorf("create db pool: %w", err)
+		return nil, fmt.Errorf("create db pool: %w", err)
 	}
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("connect db: %w", err)
+		return nil, fmt.Errorf("connect db: %w", err)
 	}
-	return postgres.NewUserRepository(pool), pool.Close, nil
+	return pool, nil
 }
 
 func envOr(key, fallback string) string {
