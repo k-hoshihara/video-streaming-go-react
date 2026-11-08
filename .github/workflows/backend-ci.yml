@@ -65,7 +65,7 @@ jobs:
       # 命令網羅（C0）。自動生成コード（internal/oapi）とテスト用のヘルパー（internal/testdb）は計測対象から外す
       - name: Test
         run: |
-          pkgs=$(go list ./internal/... | grep -v -E '/internal/(oapi|testdb)$' | paste -sd, -)
+          pkgs=$(go list ./... | grep -v -E '/internal/(oapi|testdb)$' | paste -sd, -)
           go test -race -coverpkg="$pkgs" -coverprofile=coverage.out ./...
 
       # 分岐網羅（C1）

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,53 +23,60 @@ import (
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	if err := run(logger); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := run(ctx, logger)
+	stop()
+	if err != nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(logger *slog.Logger) error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
+// run は DB に接続してサーバーを起動し、ctx が終了したら停止する。
+func run(ctx context.Context, logger *slog.Logger) error {
 	pool, err := newDBPool(ctx)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
-	userUsecase := usecase.NewUserUsecase(postgres.NewUserRepository(pool))
-	h := handler.New(userUsecase)
 
+	h := handler.New(usecase.NewUserUsecase(postgres.NewUserRepository(pool)))
 	e, err := server.New(h, logger)
 	if err != nil {
 		return err
 	}
 
-	addr := ":" + envOr("PORT", "8080")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", ":"+envOr("PORT", "8080"))
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
 	srv := &http.Server{
-		Addr:              addr,
 		Handler:           e,
 		ReadHeaderTimeout: 10 * time.Second,
+		// ボディを少しずつ送り続ける接続を切るため、ボディを含むリクエスト全体の読み込みにも上限を設ける
+		ReadTimeout: 30 * time.Second,
 	}
+	logger.Info("server started", "addr", ln.Addr().String())
+	return serve(ctx, srv, ln, logger)
+}
 
+// serve は ln でリクエストを受け付け、ctx が終了したら処理中のリクエストを待ってから停止する。
+func serve(ctx context.Context, srv *http.Server, ln net.Listener, logger *slog.Logger) error {
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("server started", "addr", addr)
-		errCh <- srv.ListenAndServe()
+		// Serve は Shutdown を呼ぶまで戻らず、戻るときは必ずエラーを返す。
+		errCh <- srv.Serve(ln)
 	}()
 
 	select {
 	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
+		return fmt.Errorf("serve: %w", err)
 	case <-ctx.Done():
 	}
 
 	logger.Info("shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
 }

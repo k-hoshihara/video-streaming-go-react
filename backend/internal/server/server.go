@@ -15,6 +15,12 @@ import (
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/oapi"
 )
 
+// MaxBodyBytes はリクエストボディの上限（バイト）。超えたら 413 を返す。
+// 仕様書の検証はボディを全部メモリに読み込んでから行うため、その前に大きすぎるボディを拒否する。
+// signup の最大のボディ（各項目が上限の長さで、すべての文字が \uXXXX の 6 バイトにエスケープされた場合）でも
+// 約 1KB のため、余裕を持たせて 4KB にする。
+const MaxBodyBytes = 4 * 1024
+
 func init() {
 	// kin-openapi は format: email を標準では検証しないため登録する。
 	openapi3.DefineStringFormatValidator("email", openapi3.NewRegexpFormatValidator(openapi3.FormatOfStringForEmail))
@@ -47,6 +53,7 @@ func New(h oapi.StrictServerInterface, logger *slog.Logger) (*echo.Echo, error) 
 			return nil
 		},
 	}))
+	e.Use(middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{Limit: fmt.Sprintf("%dB", MaxBodyBytes)}))
 	e.Use(oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddleware.Options{
 		SilenceServersWarning: true,
 	}))
@@ -56,7 +63,7 @@ func New(h oapi.StrictServerInterface, logger *slog.Logger) (*echo.Echo, error) 
 }
 
 // errorHandler はエラーを仕様書の Error 形式（{"message": "..."}）で返す。
-// 想定外のエラーは内容をログにだけ出し、クライアントには詳細を返さない。
+// サーバー側のエラー（5xx）と想定外のエラーは内容をログにだけ出し、クライアントには詳細を返さない。
 func errorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
 	return func(err error, c echo.Context) {
 		if c.Response().Committed {
@@ -66,10 +73,15 @@ func errorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
 		code := http.StatusInternalServerError
 		message := http.StatusText(code)
 		var he *echo.HTTPError
-		if errors.As(err, &he) {
+		if errors.As(err, &he) && he.Code < http.StatusInternalServerError {
 			code = he.Code
 			message = fmt.Sprint(he.Message)
 		} else {
+			if he != nil {
+				code = he.Code
+				message = http.StatusText(code)
+			}
+			// err.Error() には HTTPError の Internal（元のエラー）も含まれる
 			logger.ErrorContext(c.Request().Context(), "unhandled error", "error", err)
 		}
 

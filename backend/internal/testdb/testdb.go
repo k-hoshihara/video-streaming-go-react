@@ -15,12 +15,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// New はテストごとに専用のスキーマを作ってマイグレーションを適用し、そのスキーマに接続するプールを返す。
-// スキーマとプールはテストの終了時に片付ける。
+// URL はテスト用の DB の接続先（TEST_DATABASE_URL）を返す。
 //
 // TEST_DATABASE_URL が未設定の場合、ローカルではテストをスキップする。
 // CI（環境変数 CI が設定されている）では、DB のテストが黙ってスキップされないよう失敗にする。
-func New(t testing.TB) *pgxpool.Pool {
+func URL(t testing.TB) string {
 	t.Helper()
 
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -30,6 +29,15 @@ func New(t testing.TB) *pgxpool.Pool {
 		}
 		t.Skip("TEST_DATABASE_URL is not set")
 	}
+	return url
+}
+
+// New はテストごとに専用のスキーマを作ってマイグレーションを適用し、そのスキーマに接続するプールを返す。
+// スキーマとプールはテストの終了時に片付ける。TEST_DATABASE_URL の扱いは URL と同じ。
+func New(t testing.TB) *pgxpool.Pool {
+	t.Helper()
+
+	url := URL(t)
 	ctx := t.Context()
 
 	// 英数字だけの名前にして、SQL にそのまま埋め込めるようにする

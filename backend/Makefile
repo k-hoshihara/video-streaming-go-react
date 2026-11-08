@@ -5,7 +5,7 @@ generate:
 	go generate ./...
 
 # 自動生成コード（internal/oapi）とテスト用のヘルパー（internal/testdb）はカバレッジの計測対象から外す
-COVER_PKGS := $(shell go list ./internal/... | grep -v -E '/internal/(oapi|testdb)$$' | paste -sd, -)
+COVER_PKGS := $(shell go list ./... | grep -v -E '/internal/(oapi|testdb)$$' | paste -sd, -)
 
 test:
 	go test -race -coverpkg=$(COVER_PKGS) -coverprofile=coverage.out ./...
