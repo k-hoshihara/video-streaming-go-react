@@ -1,0 +1,96 @@
+.signup {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.signup-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.signup-card h1 {
+  margin: 0 0 24px;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.signup-card form {
+  display: grid;
+  gap: 18px;
+}
+
+.signup-field {
+  display: grid;
+  gap: 6px;
+}
+
+.signup-field label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.signup-field input {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.signup-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.signup-field input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.signup-field-error,
+.signup-field-hint {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.signup-field-error {
+  color: var(--danger);
+}
+
+.signup-field-hint {
+  color: var(--muted);
+}
+
+.signup-form-error {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--danger);
+  background: var(--danger-bg);
+  font-size: 0.9rem;
+}
+
+.signup-card button {
+  margin-top: 6px;
+  font: inherit;
+  font-weight: 600;
+  padding: 11px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.signup-card button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
