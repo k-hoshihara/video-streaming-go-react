@@ -1,4 +1,4 @@
-// Package testdb は、テストで本物の PostgreSQL を使うためのヘルパーを提供する。
+// Package testdb は、テストで PostgreSQL を使うためのヘルパーを提供する。
 // テストからだけ使う。
 package testdb
 

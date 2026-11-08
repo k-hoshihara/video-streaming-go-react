@@ -19,7 +19,7 @@ backend/
     ├── usecase/           手書き    業務ロジック
     ├── domain/            手書き    エンティティとエラー
     ├── repository/        手書き    データの保存（PostgreSQL）
-    └── testdb/            手書き    テストで本物の DB を使うためのヘルパー
+    └── testdb/            手書き    テストで DB を使うためのヘルパー
 ```
 
 手書きのコードと自動生成のコードは、次のようにつながっています。
@@ -66,3 +66,28 @@ CI（`.github/workflows/backend-ci.yml`）は、コードを生成し直した�
 - PR で、仕様書の変更が生成コードにどう反映されたかを確認できる
 
 なお、生成されたコードはカバレッジの計測対象から外しています。
+
+## テスト
+
+`backend/` で `make test` を実行します。DB を使うテストがあるため、先に DB を起動してください。
+
+```sh
+docker compose -f db/compose.yml up -d
+TEST_DATABASE_URL='postgres://app:app@localhost:5432/app?sslmode=disable' make test
+```
+
+`TEST_DATABASE_URL` がない場合、DB を使うテストはスキップされます。CI では、スキップされずに失敗します。
+
+### レイヤごとの分担
+
+| テスト | 種類 | DB |
+|---|---|---|
+| `internal/server/server_test.go` | 通しテスト（HTTP から DB まで） | 使う |
+| `internal/repository/postgres/user_test.go` | repository のテスト | 使う |
+| `internal/usecase/user_test.go` | 単体テスト | 使わない（repository をテスト用の実装に差し替える） |
+| `internal/handler/handler_test.go` | 単体テスト | 使わない（usecase をテスト用の実装に差し替える） |
+| `internal/server/error_handler_test.go` | 単体テスト | 使わない |
+
+- 通しテストは、サーバーを起動せず `httptest` でリクエストを渡します。それ以外は、仕様書による検証から DB まで本番と同じ部品を通ります。
+- DB を使うテストは、`internal/testdb` の `testdb.New(t)` でテストごとに専用のスキーマを作ります。並列に実行しても互いに影響しません。
+- usecase と handler の単体テストは、DB では起こしにくいエラー（ID の生成に失敗した場合など）を確かめるため、DB を使いません。

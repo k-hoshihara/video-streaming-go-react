@@ -19,7 +19,7 @@ import (
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/usecase"
 )
 
-// newTestServer は本番と同じ構成（仕様書による検証、本物の PostgreSQL）で組み立てたサーバーを返す。
+// newTestServer は本番と同じ構成（仕様書による検証、PostgreSQL）で組み立てたサーバーを返す。
 // DB はテストごとに専用のスキーマを使うため、並列に実行しても互いに影響しない。
 func newTestServer(t *testing.T) http.Handler {
 	t.Helper()
