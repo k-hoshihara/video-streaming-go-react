@@ -1,0 +1,98 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - backend/**
+      - docs/api/**
+      - .github/workflows/backend-ci.yml
+  push:
+    branches: [ main ]
+    paths:
+      - backend/**
+      - docs/api/**
+      - .github/workflows/backend-ci.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write # octocov が PR にカバレッジをコメントする
+      actions: read # octocov が main のレポート（Artifacts）を読んで差分を出す
+    env:
+      TEST_DATABASE_URL: postgres://app:app@localhost:5432/app?sslmode=disable
+    services:
+      postgres:
+        image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # 仕様書と生成コードが一致しているか確認する
+      - name: Check generated code is up to date
+        run: |
+          go generate ./...
+          git diff --exit-code
+
+      # 命令網羅（C0）。自動生成コード（internal/oapi）とテスト用のヘルパー（internal/testdb）は計測対象から外す
+      - name: Test
+        run: |
+          pkgs=$(go list ./... | grep -v -E '/internal/(oapi|testdb)$' | paste -sd, -)
+          go test -race -coverpkg="$pkgs" -coverprofile=coverage.out ./...
+
+      # 分岐網羅（C1）
+      - name: Branch coverage
+        run: scripts/branch-coverage.sh branch-coverage.json
+
+      - name: Report coverage
+        # フォークからの PR はトークンに書き込み権限がなく、コメントできないため除外する
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: k1LoW/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278 # v1.5.2
+        with:
+          version: v0.83.5
+        env:
+          OCTOCOV_CUSTOM_METRICS_BRANCH: backend/branch-coverage.json
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          working-directory: backend

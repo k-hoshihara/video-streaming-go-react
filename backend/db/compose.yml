@@ -1,0 +1,28 @@
+# ローカル開発用の PostgreSQL。
+#   起動: docker compose -f db/compose.yml up -d （backend/ で実行）
+#   接続: DATABASE_URL=postgres://app:app@localhost:5432/app?sslmode=disable
+# migrations/ の SQL はデータボリュームが空のとき（初回起動時）だけ実行される。
+# スキーマを変えたら `docker compose -f db/compose.yml down -v` で作り直す。
+name: video-streaming
+
+services:
+  postgres:
+    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app # ローカル専用の値
+      POSTGRES_DB: app
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # PostgreSQL 18 以降のイメージは /var/lib/postgresql をマウントする
+      - postgres-data:/var/lib/postgresql
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  postgres-data:
