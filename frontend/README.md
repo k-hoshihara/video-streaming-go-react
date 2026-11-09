@@ -17,8 +17,10 @@ npm run dev      # http://localhost:5173
 中継先は環境変数 `API_PROXY_TARGET` で変更できる。
 
 ```sh
-# 別ターミナルで API サーバーを起動しておく
-cd ../backend && go run ./cmd/server
+# 別ターミナルで DB と API サーバーを起動しておく（詳細は backend/README.md）
+cd ../backend
+docker compose -f db/compose.yml up -d
+make run
 ```
 
 本番などで API を別オリジンから呼ぶ場合は、ビルド時に `VITE_API_BASE_URL` を設定する。
@@ -30,9 +32,10 @@ cd ../backend && go run ./cmd/server
 | `npm run dev` | 開発サーバーを起動 |
 | `npm run build` | 型チェックとビルド |
 | `npm test` | テスト（Vitest） |
+| `npm run test:watch` | テストを監視モードで実行 |
 | `npm run lint` | Lint（oxlint） |
 
 ## API の型
 
-`src/api/types.ts` は `backend/api/openapi.yaml` に合わせて手で書いている。
+`src/api/types.ts` は `docs/api/v1/openapi.yaml` に合わせて手で書いている。
 （`openapi-typescript` が TypeScript 7 に未対応のため、型の自動生成は使っていない）

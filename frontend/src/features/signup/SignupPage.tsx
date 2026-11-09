@@ -1,57 +1,9 @@
 import { useActionState, useId } from 'react'
-import { ApiError } from '../../api/client'
-import { signup } from '../../api/auth'
-import type { SignupRequest, User } from '../../api/types'
-import { type SignupFieldErrors, validateSignup } from './validation'
+import { initialSignupState, signupAction } from './signupAction'
 import './SignupPage.css'
 
-type SignupState =
-  | { status: 'idle' | 'error'; values: SignupRequest; fieldErrors: SignupFieldErrors; formError?: string }
-  | { status: 'success'; user: User }
-
-const initialState: SignupState = {
-  status: 'idle',
-  values: { name: '', email: '', password: '' },
-  fieldErrors: {},
-}
-
-async function signupAction(_prev: SignupState, formData: FormData): Promise<SignupState> {
-  const values: SignupRequest = {
-    name: String(formData.get('name') ?? ''),
-    email: String(formData.get('email') ?? '').trim(),
-    password: String(formData.get('password') ?? ''),
-  }
-
-  const fieldErrors = validateSignup(values)
-  if (Object.keys(fieldErrors).length > 0) {
-    return { status: 'error', values, fieldErrors }
-  }
-
-  try {
-    const user = await signup(values)
-    return { status: 'success', user }
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 409) {
-      return {
-        status: 'error',
-        values,
-        fieldErrors: { email: 'このメールアドレスはすでに登録されています' },
-      }
-    }
-    if (err instanceof ApiError && err.status === 400) {
-      return { status: 'error', values, fieldErrors: {}, formError: '入力内容を確認してください' }
-    }
-    return {
-      status: 'error',
-      values,
-      fieldErrors: {},
-      formError: '登録に失敗しました。時間をおいて再度お試しください',
-    }
-  }
-}
-
 export function SignupPage() {
-  const [state, formAction, isPending] = useActionState(signupAction, initialState)
+  const [state, formAction, isPending] = useActionState(signupAction, initialSignupState)
   const id = useId()
 
   if (state.status === 'success') {

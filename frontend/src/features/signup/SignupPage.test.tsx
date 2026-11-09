@@ -38,7 +38,7 @@ describe('SignupPage', () => {
     expect(await screen.findByRole('heading', { name: '登録が完了しました' })).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledOnce()
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('/api/signup')
+    expect(url).toBe('/api/v1/signup')
     expect(init?.method).toBe('POST')
     expect(JSON.parse(String(init?.body))).toEqual({
       name: 'taro',
@@ -68,6 +68,55 @@ describe('SignupPage', () => {
       await screen.findByText('このメールアドレスはすでに登録されています'),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('メールアドレス')).toHaveValue('taro@example.com')
+  })
+
+  it('リクエストが不正（400）なら全体のエラーを表示する', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(400, { message: 'password is too long' }))
+
+    await fillAndSubmit({ name: 'taro', email: 'taro@example.com', password: 'password123' })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('入力内容を確認してください')
+  })
+
+  it('メールアドレスの前後の空白を除いて送信する', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(409, { message: 'email already exists' }))
+
+    await fillAndSubmit({ name: 'taro', email: '  taro@example.com  ', password: 'password123' })
+
+    await screen.findByText('このメールアドレスはすでに登録されています')
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).email).toBe('taro@example.com')
+  })
+
+  it('送信中はボタンを押せない', async () => {
+    let resolve!: (res: Response) => void
+    fetchMock.mockReturnValue(new Promise((r) => (resolve = r)))
+
+    await fillAndSubmit({ name: 'taro', email: 'taro@example.com', password: 'password123' })
+
+    expect(await screen.findByRole('button', { name: '登録中…' })).toBeDisabled()
+    resolve(jsonResponse(409, { message: 'email already exists' }))
+    expect(await screen.findByRole('button', { name: '登録する' })).toBeEnabled()
+  })
+
+  it('パスワード欄はエラーがなければヒントを、あればエラーを説明として結び付ける', async () => {
+    const user = userEvent.setup()
+    render(<SignupPage />)
+
+    const password = screen.getByLabelText('パスワード')
+    expect(password).toHaveAccessibleDescription('8文字以上')
+    expect(password).not.toHaveAttribute('aria-invalid')
+    // ヒントのない欄は説明を持たない
+    expect(screen.getByLabelText('ユーザー名')).not.toHaveAttribute('aria-describedby')
+
+    await user.click(screen.getByRole('button', { name: '登録する' }))
+
+    expect(await screen.findByLabelText('パスワード')).toHaveAccessibleDescription(
+      'パスワードを入力してください',
+    )
+    expect(screen.queryByText('8文字以上')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('ユーザー名')).toHaveAccessibleDescription(
+      'ユーザー名を入力してください',
+    )
   })
 
   it('サーバーエラーなら全体のエラーを表示する', async () => {
