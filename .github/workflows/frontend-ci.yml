@@ -1,0 +1,50 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - frontend/**
+      - .github/workflows/frontend-ci.yml
+  push:
+    branches: [ main ]
+    paths:
+      - frontend/**
+      - .github/workflows/frontend-ci.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 分岐網羅（C1）が 100% 未満なら失敗する（閾値は vite.config.ts）
+      - name: Test
+        run: npm run test:coverage
+
+      # 型チェック（tsc -b）とビルド
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
