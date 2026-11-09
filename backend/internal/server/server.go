@@ -17,9 +17,12 @@ import (
 
 // MaxBodyBytes はリクエストボディの上限（バイト）。超えたら 413 を返す。
 // 仕様書の検証はボディを全部メモリに読み込んでから行うため、その前に大きすぎるボディを拒否する。
-// signup の最大のボディ（各項目が上限の長さで、すべての文字が \uXXXX の 6 バイトにエスケープされた場合）でも
-// 約 1KB のため、余裕を持たせて 4KB にする。
-const MaxBodyBytes = 4 * 1024
+//
+// 仕様書の maxLength は文字数で数えるが、絵文字などの BMP 外の文字は JSON で
+// サロゲートペア（\uD83D\uDE00 のような 12 バイト）にエスケープできる。
+// signup で仕様書の検証を通る最大のボディは約 4.1KB（TestSignup_MaxValidBodyFitsLimit）のため、
+// 余裕を持たせて 8KB にする。
+const MaxBodyBytes = 8 * 1024
 
 func init() {
 	// kin-openapi は format: email を標準では検証しないため登録する。

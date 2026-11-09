@@ -174,20 +174,21 @@ func TestSignup_BodyLimit(t *testing.T) {
 	}
 }
 
-// signup のボディは、各項目が上限の長さで、すべての文字をエスケープしても上限に収まる。
+// 仕様書の検証を通る最大のボディでも、上限に収まる。
 func TestSignup_MaxValidBodyFitsLimit(t *testing.T) {
 	t.Parallel()
 
-	// \uXXXX の形にエスケープすると 1 文字が 6 バイトになる。
-	// パスワードは 72 バイトまでのため、1 バイト文字（a = \u0061）を 72 文字にしたときが最大になる。
-	// メールアドレスは仕様書の format により ASCII に限られるため、エスケープしない。
-	const domain = "@example.com"
-	body := `{"name":"` + strings.Repeat(`\u3042`, 50) +
-		`","email":"` + strings.Repeat("a", 254-len(domain)) + domain +
+	// 仕様書の maxLength は文字数で数えるため、1 文字あたりのバイト数が最大になるように各項目を作る。
+	// - name、email: BMP 外の文字（😀）をサロゲートペアにエスケープすると、1 文字 12 バイトになる
+	// - password: 72 バイトまでのため、1 バイト文字を \u0061 にエスケープして 72 文字（432 バイト）にしたときが最大
+	const emoji = `\uD83D\uDE00`
+	body := `{"name":"` + strings.Repeat(emoji, 50) +
+		`","email":"` + emoji + "@" + strings.Repeat(emoji, 252) +
 		`","password":"` + strings.Repeat(`\u0061`, 72) + `"}`
 	if len(body) > server.MaxBodyBytes {
 		t.Fatalf("len(body) = %d, want <= %d", len(body), server.MaxBodyBytes)
 	}
+	t.Logf("max valid body = %d bytes", len(body))
 
 	srv := newTestServer(t)
 	code, res := doJSON(t, srv, http.MethodPost, "/v1/signup", body)
