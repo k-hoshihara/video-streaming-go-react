@@ -44,6 +44,8 @@ components:
     SignupRequest:
       type: object
       required: [name, email, password]
+      # 未知のキーは 400 にする。"Name" のように大文字小文字だけが違うキーで、検証をすり抜けられないようにする
+      additionalProperties: false
       properties:
         name:
           type: string

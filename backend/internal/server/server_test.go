@@ -288,6 +288,10 @@ func TestSignup_BadRequest(t *testing.T) {
 		{"name with tab", `{"name":"ta\tro","email":"taro@example.com","password":"password123"}`},
 		{"name with DEL", `{"name":"ta\u007fro","email":"taro@example.com","password":"password123"}`},
 		{"email with NUL", `{"name":"taro","email":"ta\u0000ro@example.com","password":"password123"}`},
+		// 未知のキー。大文字小文字だけが違うキーで、検証済みの値が上書きされないようにする
+		{"case-variant name key", `{"name":"taro","email":"taro@example.com","password":"password123","Name":"ta\u0000ro"}`},
+		{"case-variant email key", `{"name":"taro","email":"taro@example.com","password":"password123","EMAIL":"😀@example.com"}`},
+		{"unknown key", `{"name":"taro","email":"taro@example.com","password":"password123","zzz":"x"}`},
 		{"empty name", `{"name":"","email":"taro@example.com","password":"password123"}`},
 		{"missing name", `{"email":"taro@example.com","password":"password123"}`},
 		{"malformed json", `{"name":`},
