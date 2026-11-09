@@ -22,15 +22,57 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for LoginResponseTokenType.
+const (
+	Bearer LoginResponseTokenType = "Bearer"
+)
+
+// Valid indicates whether the value is a known member of the LoginResponseTokenType enum.
+func (e LoginResponseTokenType) Valid() bool {
+	switch e {
+	case Bearer:
+		return true
+	default:
+		return false
+	}
+}
+
+// EmailAddress Example: taro@example.com
+type EmailAddress = openapi_types.Email
+
 // Error defines model for Error.
 type Error struct {
 	Message string `json:"message"`
 }
 
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	// Email Example: taro@example.com
+	Email EmailAddress `json:"email"`
+
+	// Password Example: password123
+	Password string `json:"password"`
+}
+
+// LoginResponse defines model for LoginResponse.
+type LoginResponse struct {
+	// AccessToken Authorization ヘッダーに "Bearer <access_token>" の形で付ける
+	AccessToken string `json:"access_token"`
+
+	// ExpiresIn アクセストークンの有効期間（秒）
+	//
+	// Example: 3600
+	ExpiresIn int                    `json:"expires_in"`
+	TokenType LoginResponseTokenType `json:"token_type"`
+}
+
+// LoginResponseTokenType defines model for LoginResponse.TokenType.
+type LoginResponseTokenType string
+
 // SignupRequest defines model for SignupRequest.
 type SignupRequest struct {
 	// Email Example: taro@example.com
-	Email openapi_types.Email `json:"email"`
+	Email EmailAddress `json:"email"`
 
 	// Name Example: taro
 	Name string `json:"name"`
@@ -47,11 +89,17 @@ type User struct {
 	Name      string              `json:"name"`
 }
 
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginRequest
+
 // SignupJSONRequestBody defines body for Signup for application/json ContentType.
 type SignupJSONRequestBody = SignupRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Login ログイン
+	// (POST /v1/login)
+	Login(ctx echo.Context) error
 	// Signup ユーザー登録
 	// (POST /v1/signup)
 	Signup(ctx echo.Context) error
@@ -60,6 +108,15 @@ type ServerInterface interface {
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// Login converts echo context to params.
+func (w *ServerInterfaceWrapper) Login(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.Login(ctx)
+	return err
 }
 
 // Signup converts echo context to params.
@@ -119,7 +176,72 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	}
 
 	router.POST(options.BaseURL+"/v1/signup", wrapper.Signup, options.OperationMiddlewares["signup"]...)
+	router.POST(options.BaseURL+"/v1/login", wrapper.Login, options.OperationMiddlewares["login"]...)
 
+}
+
+type LoginRequestObject struct {
+	Body *LoginJSONRequestBody
+}
+
+type LoginResponseObject interface {
+	VisitLoginResponse(w http.ResponseWriter) error
+}
+
+type Login200JSONResponse LoginResponse
+
+func (response Login200JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login400JSONResponse Error
+
+func (response Login400JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login401JSONResponse Error
+
+func (response Login401JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login500JSONResponse Error
+
+func (response Login500JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type SignupRequestObject struct {
@@ -188,6 +310,9 @@ func (response Signup500JSONResponse) VisitSignupResponse(w http.ResponseWriter)
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Login ログイン
+	// (POST /v1/login)
+	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
 	// Signup ユーザー登録
 	// (POST /v1/signup)
 	Signup(ctx context.Context, request SignupRequestObject) (SignupResponseObject, error)
@@ -203,6 +328,52 @@ func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareF
 type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
+}
+
+// Login operation middleware
+func (sh *strictHandler) Login(ctx echo.Context) error {
+	var request LoginRequestObject
+
+	var body LoginJSONRequestBody
+	var err error
+	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+		// A request validator built on kin-openapi's openapi3filter with
+		// KeepValidatedValue leaves the value it validated on the body. Bind
+		// that value, matching member names exactly, so the handler receives
+		// what was validated instead of a second, case-insensitive decode.
+		// Otherwise bind only the request body, so that path and query
+		// parameters are not also bound into the body struct.
+		if vb, ok := ctx.Request().Body.(interface{ ValidatedValue() any }); !ok || runtime.BindJSONValue(vb.ValidatedValue(), &body) != nil {
+			err = binder.BindBody(ctx, &body)
+		}
+	} else {
+		// A custom binder is installed on the Echo instance; defer to it
+		// entirely, since echo.Binder does not expose body-only binding and
+		// the binder may do more than decode (for example call ctx.Validate).
+		err = ctx.Bind(&body)
+	}
+	if err != nil {
+		return err
+	}
+	request.Body = &body
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.Login(ctx.Request().Context(), request.(LoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Login")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(LoginResponseObject); ok {
+		return validResponse.VisitLoginResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
 }
 
 // Signup operation middleware
@@ -256,18 +427,26 @@ func (sh *strictHandler) Signup(ctx echo.Context) error {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"7wEA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

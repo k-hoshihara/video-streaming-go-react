@@ -169,3 +169,50 @@ func TestUserRepository_Create_ColumnLength(t *testing.T) {
 		})
 	}
 }
+
+func TestUserRepository_FindByEmail(t *testing.T) {
+	t.Parallel()
+	r := NewUserRepository(testdb.New(t))
+
+	want := newUser("taro@example.com")
+	if err := r.Create(t.Context(), want); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	got, err := r.FindByEmail(t.Context(), "taro@example.com")
+	if err != nil {
+		t.Fatalf("FindByEmail() error = %v", err)
+	}
+	if got.ID != want.ID || got.Name != want.Name || got.Email != want.Email ||
+		string(got.PasswordHash) != string(want.PasswordHash) || !got.CreatedAt.Equal(want.CreatedAt) {
+		t.Errorf("FindByEmail() = %+v, want %+v", got, want)
+	}
+}
+
+func TestUserRepository_FindByEmail_NotFound(t *testing.T) {
+	t.Parallel()
+	r := NewUserRepository(testdb.New(t))
+	if err := r.Create(t.Context(), newUser("taro@example.com")); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// 大文字小文字をそろえるのは呼び出し側（usecase）の役割のため、ここでは一致しない
+	for _, email := range []string{"jiro@example.com", "Taro@example.com"} {
+		if _, err := r.FindByEmail(t.Context(), email); !errors.Is(err, domain.ErrUserNotFound) {
+			t.Errorf("FindByEmail(%q) error = %v, want %v", email, err, domain.ErrUserNotFound)
+		}
+	}
+}
+
+// 見つからない以外の DB エラーは ErrUserNotFound にせず、そのまま返す。
+func TestUserRepository_FindByEmail_DBError(t *testing.T) {
+	t.Parallel()
+	pool := testdb.New(t)
+	r := NewUserRepository(pool)
+	pool.Close()
+
+	_, err := r.FindByEmail(t.Context(), "taro@example.com")
+	if err == nil || errors.Is(err, domain.ErrUserNotFound) {
+		t.Fatalf("FindByEmail() error = %v, want a DB error other than %v", err, domain.ErrUserNotFound)
+	}
+}

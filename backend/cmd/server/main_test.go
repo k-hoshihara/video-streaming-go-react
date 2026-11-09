@@ -7,9 +7,11 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/auth"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/testdb"
 )
 
@@ -64,7 +66,11 @@ func TestNewDBPool_Errors(t *testing.T) {
 }
 
 // 起動したサーバーがリクエストに応答し、ctx の終了で正常に停止することを確認する。
+// testJWTSecret はテスト用のアクセストークンの秘密鍵（auth.MinSecretBytes ちょうど）。
+var testJWTSecret = strings.Repeat("s", auth.MinSecretBytes)
+
 func TestRun(t *testing.T) {
+	t.Setenv("JWT_SECRET", testJWTSecret)
 	t.Setenv("DATABASE_URL", testdb.URL(t))
 	port := freePort(t)
 	t.Setenv("PORT", strconv.Itoa(port))
@@ -83,6 +89,7 @@ func TestRun(t *testing.T) {
 }
 
 func TestRun_DBError(t *testing.T) {
+	t.Setenv("JWT_SECRET", testJWTSecret)
 	t.Setenv("DATABASE_URL", "")
 
 	if err := run(t.Context(), discard); err == nil {
@@ -91,7 +98,19 @@ func TestRun_DBError(t *testing.T) {
 }
 
 // ポートが使用中なら、起動に失敗する。
+// JWT_SECRET がないか短すぎれば、起動に失敗する。
+func TestRun_JWTSecretError(t *testing.T) {
+	for _, secret := range []string{"", testJWTSecret[1:]} {
+		t.Setenv("JWT_SECRET", secret)
+
+		if err := run(t.Context(), discard); err == nil {
+			t.Fatalf("JWT_SECRET of %d bytes: run() error = nil, want an error", len(secret))
+		}
+	}
+}
+
 func TestRun_ListenError(t *testing.T) {
+	t.Setenv("JWT_SECRET", testJWTSecret)
 	t.Setenv("DATABASE_URL", testdb.URL(t))
 	var lc net.ListenConfig
 	ln, err := lc.Listen(t.Context(), "tcp", ":0")

@@ -41,7 +41,7 @@ func TestHandler_Signup_Created(t *testing.T) {
 	}
 	uc := &fakeUserUsecase{user: user}
 
-	res, err := New(uc).Signup(t.Context(), signupRequest())
+	res, err := New(uc, nil).Signup(t.Context(), signupRequest())
 	if err != nil {
 		t.Fatalf("Signup() error = %v", err)
 	}
@@ -74,7 +74,7 @@ func TestHandler_Signup_Errors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			res, err := New(&fakeUserUsecase{err: tt.ucErr}).Signup(t.Context(), signupRequest())
+			res, err := New(&fakeUserUsecase{err: tt.ucErr}, nil).Signup(t.Context(), signupRequest())
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Signup() error = %v, want %v", err, tt.wantErr)
 			}

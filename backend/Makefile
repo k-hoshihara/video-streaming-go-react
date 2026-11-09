@@ -21,9 +21,11 @@ lint:
 
 # ローカルの DB（db/compose.yml）に接続して起動する
 DATABASE_URL ?= postgres://app:app@localhost:5432/app?sslmode=disable
+# ローカル用のアクセストークンの秘密鍵。本番では十分にランダムな値を設定する
+JWT_SECRET ?= local-development-secret-do-not-use-in-production
 
 run:
-	DATABASE_URL='$(DATABASE_URL)' go run ./cmd/server
+	DATABASE_URL='$(DATABASE_URL)' JWT_SECRET='$(JWT_SECRET)' go run ./cmd/server
 
 docker-build:
 	docker build -t video-streaming-backend .

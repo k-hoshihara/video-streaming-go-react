@@ -17,6 +17,11 @@ var (
 	ErrEmailAlreadyExists = errors.New("email already exists")
 	// ErrPasswordTooLong はパスワードが MaxPasswordBytes を超えるときに返す。
 	ErrPasswordTooLong = errors.New("password is too long")
+	// ErrUserNotFound はユーザーが見つからないときに返す。
+	ErrUserNotFound = errors.New("user not found")
+	// ErrInvalidCredentials はログインでメールアドレスまたはパスワードが違うときに返す。
+	// 登録の有無を知られないよう、どちらが違うかは区別しない。
+	ErrInvalidCredentials = errors.New("invalid email or password")
 )
 
 // User は登録済みのユーザー。

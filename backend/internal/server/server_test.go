@@ -11,7 +11,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/auth"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/handler"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/oapi"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/repository/postgres"
@@ -20,13 +22,20 @@ import (
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/usecase"
 )
 
+// testJWTSecret はテスト用のアクセストークンの秘密鍵。
+var testJWTSecret = []byte(strings.Repeat("s", auth.MinSecretBytes))
+
 // newTestServer は本番と同じ構成（仕様書による検証、PostgreSQL）で組み立てたサーバーを返す。
 // DB はテストごとに専用のスキーマを使うため、並列に実行しても互いに影響しない。
 func newTestServer(t *testing.T) http.Handler {
 	t.Helper()
 
 	repo := postgres.NewUserRepository(testdb.New(t))
-	h := handler.New(usecase.NewUserUsecase(repo))
+	tokens, err := auth.NewJWTIssuer(testJWTSecret, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := handler.New(usecase.NewUserUsecase(repo), usecase.NewAuthUsecase(repo, tokens))
 	e, err := server.New(h, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("server.New() error = %v", err)
@@ -327,6 +336,10 @@ func TestSignup_BadRequest(t *testing.T) {
 type failingHandler struct{}
 
 func (failingHandler) Signup(context.Context, oapi.SignupRequestObject) (oapi.SignupResponseObject, error) {
+	return nil, errors.New("database is down")
+}
+
+func (failingHandler) Login(context.Context, oapi.LoginRequestObject) (oapi.LoginResponseObject, error) {
 	return nil, errors.New("database is down")
 }
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/auth"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/handler"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/repository/postgres"
 	"github.com/k-hoshihara/video-streaming-go-react/backend/internal/server"
@@ -32,15 +33,25 @@ func main() {
 	}
 }
 
+// accessTokenTTL はアクセストークンの有効期間。
+const accessTokenTTL = time.Hour
+
 // run は DB に接続してサーバーを起動し、ctx が終了したら停止する。
 func run(ctx context.Context, logger *slog.Logger) error {
+	// アクセストークンの署名に使う秘密鍵。auth.MinSecretBytes 以上の長さが必要
+	tokens, err := auth.NewJWTIssuer([]byte(os.Getenv("JWT_SECRET")), accessTokenTTL)
+	if err != nil {
+		return fmt.Errorf("JWT_SECRET: %w", err)
+	}
+
 	pool, err := newDBPool(ctx)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
-	h := handler.New(usecase.NewUserUsecase(postgres.NewUserRepository(pool)))
+	users := postgres.NewUserRepository(pool)
+	h := handler.New(usecase.NewUserUsecase(users), usecase.NewAuthUsecase(users, tokens))
 	e, err := server.New(h, logger)
 	if err != nil {
 		return err

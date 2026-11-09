@@ -39,6 +39,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /v1/login:
+    post:
+      operationId: login
+      summary: ログイン
+      description: |
+        メールアドレスとパスワードを確かめ、アクセストークン（JWT）を発行する。
+        メールアドレスが登録されていない場合とパスワードが違う場合は、どちらも同じ 401 を返す（登録の有無を知られないようにする）。
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 発行したアクセストークン
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: メールアドレスまたはパスワードが違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: サーバー内部のエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     SignupRequest:
@@ -57,23 +96,52 @@ components:
           pattern: '^[^\p{Cc}\p{Zl}\p{Zp}]*$'
           example: taro
         email:
-          type: string
-          format: email
-          maxLength: 254
-          # ブラウザの <input type="email">（WHATWG）と同じ形式に、次の 3 点を加えたもの
-          # - @ の前は 64 文字まで（RFC 5321）
-          # - ドメインに . が 1 つ以上必要（taro@localhost は不可）
-          # - @ の前の . は先頭・末尾・連続を不可（RFC 5322）。これは pattern ではなく、
-          #   生成コードの Email 型（format: email）が net/mail.ParseAddress で検証する
-          # ASCII のみ。日本語や絵文字は使えない。想定するパターンは backend/internal/domain/user.go を参照
-          pattern: '^[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]{1,64}@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$'
-          example: taro@example.com
+          $ref: "#/components/schemas/EmailAddress"
         password:
           type: string
           # bcrypt は 72 バイトを超える部分を無視するため上限を設ける
           minLength: 8
           maxLength: 72
           example: password123
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          $ref: "#/components/schemas/EmailAddress"
+        password:
+          type: string
+          # 登録時の条件（8 文字以上）が将来変わっても、既存のユーザーがログインできるよう下限は 1 文字にする
+          minLength: 1
+          maxLength: 72
+          example: password123
+    LoginResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: Authorization ヘッダーに "Bearer <access_token>" の形で付ける
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: アクセストークンの有効期間（秒）
+          example: 3600
+    EmailAddress:
+      type: string
+      format: email
+      maxLength: 254
+      # ブラウザの <input type="email">（WHATWG）と同じ形式に、次の 3 点を加えたもの
+      # - @ の前は 64 文字まで（RFC 5321）
+      # - ドメインに . が 1 つ以上必要（taro@localhost は不可）
+      # - @ の前の . は先頭・末尾・連続を不可（RFC 5322）。これは pattern ではなく、
+      #   生成コードの Email 型（format: email）が net/mail.ParseAddress で検証する
+      # ASCII のみ。日本語や絵文字は使えない。想定するパターンは backend/internal/domain/user.go を参照
+      pattern: '^[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]{1,64}@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$'
+      example: taro@example.com
     User:
       type: object
       required: [id, name, email, created_at]

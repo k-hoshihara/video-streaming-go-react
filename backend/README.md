@@ -18,6 +18,7 @@ backend/
     ├── handler/           手書き    HTTP と usecase の間の変換
     ├── usecase/           手書き    業務ロジック
     ├── domain/            手書き    エンティティとエラー
+    ├── auth/              手書き    アクセストークン（JWT）の発行
     ├── repository/        手書き    データの保存（PostgreSQL）
     └── testdb/            手書き    テストで DB を使うためのヘルパー
 ```
@@ -27,6 +28,23 @@ backend/
 - 自動生成のコードには、仕様書から作られたリクエストやレスポンスの型と、`StrictServerInterface` というインターフェースがあります。
 - 手書きの `handler` は、このインターフェースを実装します。
 - エンドポイントを増やすと、`StrictServerInterface` にメソッドが追加されます。`handler` に実装を足さないとコンパイルエラーになるため、実装し忘れに気づけます。
+
+## 起動
+
+`backend/` で次を実行します。
+
+```sh
+docker compose -f db/compose.yml up -d
+make run
+```
+
+| 環境変数 | 必須 | 内容 |
+|---|---|---|
+| `DATABASE_URL` | ○ | PostgreSQL の接続先。`make run` ではローカルの DB を指す |
+| `JWT_SECRET` | ○ | アクセストークン（JWT）の署名に使う秘密鍵。32 バイト以上。`make run` ではローカル用の値を使う |
+| `PORT` | | 待ち受けるポート。省略時は 8080 |
+
+本番の `JWT_SECRET` は、`openssl rand -base64 48` などで作った十分にランダムな値にしてください。
 
 ## コードの自動生成
 
@@ -84,8 +102,11 @@ TEST_DATABASE_URL='postgres://app:app@localhost:5432/app?sslmode=disable' make t
 |---|---|---|
 | `internal/server/server_test.go` | 通しテスト（HTTP から DB まで） | 使う |
 | `internal/repository/postgres/user_test.go` | repository のテスト | 使う |
-| `internal/usecase/user_test.go` | 単体テスト | 使わない（repository をテスト用の実装に差し替える） |
-| `internal/handler/handler_test.go` | 単体テスト | 使わない（usecase をテスト用の実装に差し替える） |
+| `internal/server/login_test.go` | 通しテスト（HTTP から DB まで） | 使う |
+| `internal/usecase/user_test.go`、`auth_test.go` | 単体テスト | 使わない（repository をテスト用の実装に差し替える） |
+| `internal/handler/handler_test.go`、`login_test.go` | 単体テスト | 使わない（usecase をテスト用の実装に差し替える） |
+| `internal/auth/jwt_test.go` | 単体テスト | 使わない |
+| `cmd/server/main_test.go` | 起動と停止のテスト | 使う |
 | `internal/server/error_handler_test.go` | 単体テスト | 使わない |
 
 - 通しテストは、サーバーを起動せず `httptest` でリクエストを渡します。それ以外は、仕様書による検証から DB まで本番と同じ部品を通ります。
