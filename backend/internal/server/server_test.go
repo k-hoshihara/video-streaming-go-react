@@ -125,6 +125,14 @@ func TestSignup_Boundaries(t *testing.T) {
 		{"name 50 multibyte chars", body(strings.Repeat("あ", 50), email, password), http.StatusCreated},
 		{"name 51 multibyte chars", body(strings.Repeat("あ", 51), email, password), http.StatusBadRequest},
 		{"name with emoji", body("taro😀", email, password), http.StatusCreated},
+		// name: 制御文字の範囲の境界（U+001F / U+0020、U+007E / U+007F、U+009F / U+00A0）
+		{"name with U+001F", body(`ta\u001fro`, email, password), http.StatusBadRequest},
+		{"name with U+0020 (space)", body(`ta\u0020ro`, email, password), http.StatusCreated},
+		{"name with U+007E (~)", body(`ta\u007ero`, email, password), http.StatusCreated},
+		{"name with U+007F (DEL)", body(`ta\u007fro`, email, password), http.StatusBadRequest},
+		{"name with U+0080", body(`ta\u0080ro`, email, password), http.StatusBadRequest},
+		{"name with U+009F", body(`ta\u009fro`, email, password), http.StatusBadRequest},
+		{"name with U+00A0 (no-break space)", body(`ta\u00a0ro`, email, password), http.StatusCreated},
 		{"name 51 chars", body(strings.Repeat("a", 51), email, password), http.StatusBadRequest},
 		// email: 全体は 254 文字まで
 		{"email 254 chars", body(name, email254, password), http.StatusCreated},
@@ -287,6 +295,9 @@ func TestSignup_BadRequest(t *testing.T) {
 		{"name with newline", `{"name":"ta\nro","email":"taro@example.com","password":"password123"}`},
 		{"name with tab", `{"name":"ta\tro","email":"taro@example.com","password":"password123"}`},
 		{"name with DEL", `{"name":"ta\u007fro","email":"taro@example.com","password":"password123"}`},
+		{"name with NEL", `{"name":"ta\u0085ro","email":"taro@example.com","password":"password123"}`},
+		{"name with line separator", `{"name":"ta\u2028ro","email":"taro@example.com","password":"password123"}`},
+		{"name with paragraph separator", `{"name":"ta\u2029ro","email":"taro@example.com","password":"password123"}`},
 		{"email with NUL", `{"name":"taro","email":"ta\u0000ro@example.com","password":"password123"}`},
 		// 未知のキー。大文字小文字だけが違うキーで、検証済みの値が上書きされないようにする
 		{"case-variant name key", `{"name":"taro","email":"taro@example.com","password":"password123","Name":"ta\u0000ro"}`},

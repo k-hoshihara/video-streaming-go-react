@@ -51,8 +51,10 @@ components:
           type: string
           minLength: 1
           maxLength: 50
-          # 制御文字（NUL、改行、タブなど）は使えない。PostgreSQL は NUL を保存できないため、ここで弾く
-          pattern: '^[^\x00-\x1F\x7F]*$'
+          # 制御文字と改行にあたる文字は使えない。PostgreSQL は NUL を保存できないため、ここで弾く
+          # - \p{Cc}: 制御文字（C0 の U+0000〜U+001F、DEL の U+007F、C1 の U+0080〜U+009F）。NUL、改行、タブ、NEL など
+          # - \p{Zl}、\p{Zp}: 行の区切り（U+2028）、段落の区切り（U+2029）
+          pattern: '^[^\p{Cc}\p{Zl}\p{Zp}]*$'
           example: taro
         email:
           type: string
