@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -93,12 +94,16 @@ func TestSignup_DuplicateEmail(t *testing.T) {
 	}
 }
 
+// labelOf は n 文字の a を返す。
+func labelOf(n int) string { return strings.Repeat("a", n) }
+
+// email254 は、@ の前が 64 文字、ドメインのラベルが 63 文字以下で、全体が 254 文字の正しいメールアドレス。
+var email254 = labelOf(64) + "@" + labelOf(63) + "." + labelOf(63) + "." + labelOf(61)
+
 // 仕様書の minLength / maxLength と bcrypt の上限（72 バイト）について、境界の両側を確認する。
 func TestSignup_Boundaries(t *testing.T) {
 	t.Parallel()
 
-	const domain = "@example.com"
-	emailOfLen := func(n int) string { return strings.Repeat("a", n-len(domain)) + domain }
 	body := func(name, email, password string) string {
 		return `{"name":"` + name + `","email":"` + email + `","password":"` + password + `"}`
 	}
@@ -117,10 +122,19 @@ func TestSignup_Boundaries(t *testing.T) {
 		{"name 0 chars", body("", email, password), http.StatusBadRequest},
 		{"name 1 char", body("a", email, password), http.StatusCreated},
 		{"name 50 chars", body(strings.Repeat("a", 50), email, password), http.StatusCreated},
+		{"name 50 multibyte chars", body(strings.Repeat("あ", 50), email, password), http.StatusCreated},
+		{"name 51 multibyte chars", body(strings.Repeat("あ", 51), email, password), http.StatusBadRequest},
+		{"name with emoji", body("taro😀", email, password), http.StatusCreated},
 		{"name 51 chars", body(strings.Repeat("a", 51), email, password), http.StatusBadRequest},
-		// email: 254 文字まで
-		{"email 254 chars", body(name, emailOfLen(254), password), http.StatusCreated},
-		{"email 255 chars", body(name, emailOfLen(255), password), http.StatusBadRequest},
+		// email: 全体は 254 文字まで
+		{"email 254 chars", body(name, email254, password), http.StatusCreated},
+		{"email 255 chars", body(name, email254[:64]+"@"+labelOf(63)+"."+labelOf(63)+"."+labelOf(62), password), http.StatusBadRequest},
+		// email: @ の前は 64 文字まで
+		{"email local part 64 chars", body(name, labelOf(64)+"@example.com", password), http.StatusCreated},
+		{"email local part 65 chars", body(name, labelOf(65)+"@example.com", password), http.StatusBadRequest},
+		// email: ドメインのラベルは 63 文字まで
+		{"email domain label 63 chars", body(name, "taro@"+labelOf(63)+".com", password), http.StatusCreated},
+		{"email domain label 64 chars", body(name, "taro@"+labelOf(64)+".com", password), http.StatusBadRequest},
 		// password: 8〜72 文字、かつ 72 バイトまで
 		{"password 7 chars", body(name, email, strings.Repeat("a", 7)), http.StatusBadRequest},
 		{"password 8 chars", body(name, email, strings.Repeat("a", 8)), http.StatusCreated},
@@ -179,12 +193,19 @@ func TestSignup_MaxValidBodyFitsLimit(t *testing.T) {
 	t.Parallel()
 
 	// 仕様書の maxLength は文字数で数えるため、1 文字あたりのバイト数が最大になるように各項目を作る。
-	// - name、email: BMP 外の文字（😀）をサロゲートペアにエスケープすると、1 文字 12 バイトになる
-	// - password: 72 バイトまでのため、1 バイト文字を \u0061 にエスケープして 72 文字（432 バイト）にしたときが最大
-	const emoji = `\uD83D\uDE00`
-	body := `{"name":"` + strings.Repeat(emoji, 50) +
-		`","email":"` + emoji + "@" + strings.Repeat(emoji, 252) +
-		`","password":"` + strings.Repeat(`\u0061`, 72) + `"}`
+	// - name: 形式の制限がないため、BMP 外の文字（😀）をサロゲートペアにエスケープすると 1 文字 12 バイトになる
+	// - email: ASCII のみだが、\u0061 のようにエスケープすると 1 文字 6 バイトになる（254 文字）
+	// - password: 72 バイトまでのため、1 バイト文字をエスケープして 72 文字（432 バイト）にしたときが最大
+	escapeASCII := func(s string) string {
+		var b strings.Builder
+		for _, c := range []byte(s) {
+			fmt.Fprintf(&b, `\u%04x`, c)
+		}
+		return b.String()
+	}
+	body := `{"name":"` + strings.Repeat(`\uD83D\uDE00`, 50) +
+		`","email":"` + escapeASCII(email254) +
+		`","password":"` + escapeASCII(labelOf(72)) + `"}`
 	if len(body) > server.MaxBodyBytes {
 		t.Fatalf("len(body) = %d, want <= %d", len(body), server.MaxBodyBytes)
 	}
@@ -194,6 +215,58 @@ func TestSignup_MaxValidBodyFitsLimit(t *testing.T) {
 	code, res := doJSON(t, srv, http.MethodPost, "/v1/signup", body)
 	if code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d, body = %v", code, http.StatusCreated, res)
+	}
+}
+
+// メールアドレスの形式。想定するパターンは internal/domain/user.go の User.Email を参照。
+func TestSignup_EmailFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		email string
+		want  int
+	}{
+		{"taro@example.com", http.StatusCreated},
+		{"Taro@Example.com", http.StatusCreated},
+		{"taro+test@example.com", http.StatusCreated},
+		{"taro.yamada@mail.example.co.jp", http.StatusCreated},
+		{"taro@my-example.com", http.StatusCreated},
+		{"1234@example.com", http.StatusCreated},
+		{"!#$%&'*+/=?^_`{|}~-@example.com", http.StatusCreated},
+		{"taro.yamada.jr@example.com", http.StatusCreated},
+
+		{"taro@localhost", http.StatusBadRequest},
+		{"山田@example.jp", http.StatusBadRequest},
+		{"taro@例え.jp", http.StatusBadRequest},
+		{"😀@example.com", http.StatusBadRequest},
+		{"taro@😀.com", http.StatusBadRequest},
+		{"ta ro@example.com", http.StatusBadRequest},
+		{" taro@example.com", http.StatusBadRequest},
+		{`\"taro\"@example.com`, http.StatusBadRequest},
+		{"taro@[192.168.0.1]", http.StatusBadRequest},
+		{"taro@@example.com", http.StatusBadRequest},
+		{"taro", http.StatusBadRequest},
+		{"@example.com", http.StatusBadRequest},
+		{"taro@", http.StatusBadRequest},
+		{"taro@-example.com", http.StatusBadRequest},
+		{"taro@example-.com", http.StatusBadRequest},
+		{"taro@example..com", http.StatusBadRequest},
+		{"taro@example.com.", http.StatusBadRequest},
+		{".taro@example.com", http.StatusBadRequest},
+		{"taro.@example.com", http.StatusBadRequest},
+		{"ta..ro@example.com", http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.email, func(t *testing.T) {
+			t.Parallel()
+			srv := newTestServer(t)
+
+			code, res := doJSON(t, srv, http.MethodPost, "/v1/signup",
+				`{"name":"taro","email":"`+tt.email+`","password":"password123"}`)
+			if code != tt.want {
+				t.Fatalf("status = %d, want %d, body = %v", code, tt.want, res)
+			}
+		})
 	}
 }
 
@@ -209,6 +282,12 @@ func TestSignup_BadRequest(t *testing.T) {
 		{"password too long", `{"name":"taro","email":"taro@example.com","password":"` + strings.Repeat("a", 73) + `"}`},
 		// 30 文字で仕様書の maxLength は満たすが、90 バイトで bcrypt の上限を超える
 		{"multibyte password too long", `{"name":"taro","email":"taro@example.com","password":"` + strings.Repeat("あ", 30) + `"}`},
+		// 制御文字。NUL は PostgreSQL に保存できないため、DB に届く前に 400 にする
+		{"name with NUL", `{"name":"ta\u0000ro","email":"taro@example.com","password":"password123"}`},
+		{"name with newline", `{"name":"ta\nro","email":"taro@example.com","password":"password123"}`},
+		{"name with tab", `{"name":"ta\tro","email":"taro@example.com","password":"password123"}`},
+		{"name with DEL", `{"name":"ta\u007fro","email":"taro@example.com","password":"password123"}`},
+		{"email with NUL", `{"name":"taro","email":"ta\u0000ro@example.com","password":"password123"}`},
 		{"empty name", `{"name":"","email":"taro@example.com","password":"password123"}`},
 		{"missing name", `{"email":"taro@example.com","password":"password123"}`},
 		{"malformed json", `{"name":`},

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	oapimiddleware "github.com/oapi-codegen/echo-middleware"
@@ -18,16 +17,11 @@ import (
 // MaxBodyBytes はリクエストボディの上限（バイト）。超えたら 413 を返す。
 // 仕様書の検証はボディを全部メモリに読み込んでから行うため、その前に大きすぎるボディを拒否する。
 //
-// 仕様書の maxLength は文字数で数えるが、絵文字などの BMP 外の文字は JSON で
-// サロゲートペア（\uD83D\uDE00 のような 12 バイト）にエスケープできる。
-// signup で仕様書の検証を通る最大のボディは約 4.1KB（TestSignup_MaxValidBodyFitsLimit）のため、
-// 余裕を持たせて 8KB にする。
-const MaxBodyBytes = 8 * 1024
-
-func init() {
-	// kin-openapi は format: email を標準では検証しないため登録する。
-	openapi3.DefineStringFormatValidator("email", openapi3.NewRegexpFormatValidator(openapi3.FormatOfStringForEmail))
-}
+// 仕様書の maxLength は文字数で数えるが、JSON では文字をエスケープできる（\u0061 は 6 バイト、
+// 絵文字などの BMP 外の文字はサロゲートペアの \uD83D\uDE00 で 12 バイト）。
+// signup で仕様書の検証を通る最大のボディは約 2.6KB（TestSignup_MaxValidBodyFitsLimit）のため、
+// 余裕を持たせて 4KB にする。
+const MaxBodyBytes = 4 * 1024
 
 // New は API のルーティングとミドルウェアを設定した Echo を返す。
 // リクエストは OpenAPI の仕様書で検証してからハンドラーに渡す。

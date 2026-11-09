@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -119,5 +120,52 @@ func TestUserRepository_Create_Concurrent(t *testing.T) {
 
 	if succeeded != 1 {
 		t.Fatalf("succeeded = %d, want 1", succeeded)
+	}
+}
+
+// name と email の列の上限（varchar(n) の文字数）を確認する。
+// 仕様書の検証をすり抜けた値も、DB で保存を拒否する。
+func TestUserRepository_Create_ColumnLength(t *testing.T) {
+	t.Parallel()
+
+	emailOfLen := func(n int) string {
+		const domain = "@example.com"
+		return strings.Repeat("a", n-len(domain)) + domain
+	}
+	tests := []struct {
+		name    string
+		user    func(u *domain.User)
+		wantErr bool
+	}{
+		{"name 50 chars", func(u *domain.User) { u.Name = strings.Repeat("a", 50) }, false},
+		{"name 51 chars", func(u *domain.User) { u.Name = strings.Repeat("a", 51) }, true},
+		// varchar(n) の n はバイト数ではなく文字数
+		{"name 50 multibyte chars", func(u *domain.User) { u.Name = strings.Repeat("あ", 50) }, false},
+		{"name 51 multibyte chars", func(u *domain.User) { u.Name = strings.Repeat("あ", 51) }, true},
+		{"email 254 chars", func(u *domain.User) { u.Email = emailOfLen(254) }, false},
+		{"email 255 chars", func(u *domain.User) { u.Email = emailOfLen(255) }, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r := NewUserRepository(testdb.New(t))
+
+			user := newUser("taro@example.com")
+			tt.user(user)
+			err := r.Create(t.Context(), user)
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("Create() error = %v", err)
+				}
+				return
+			}
+			// 22001: string_data_right_truncation（値が長すぎる）
+			if pgErr, ok := errors.AsType[*pgconn.PgError](err); !ok || pgErr.Code != "22001" {
+				t.Fatalf("Create() error = %v, want SQLSTATE 22001", err)
+			}
+			if errors.Is(err, domain.ErrEmailAlreadyExists) {
+				t.Fatalf("Create() error = %v, must not be %v", err, domain.ErrEmailAlreadyExists)
+			}
+		})
 	}
 }
